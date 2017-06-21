@@ -8,9 +8,8 @@
 
 #import <Foundation/Foundation.h>
 #import "PDAQueueCommand.h"
-#import "PediaDef.h"
 @protocol PDAMessageHandler;
-
+typedef void (^PDAResponseBlock)(id __nullable result, NSError  * __nullable error);
 NS_ASSUME_NONNULL_BEGIN
 
 typedef NS_ENUM(NSUInteger, PDAMessageManagerState) {
@@ -65,21 +64,32 @@ typedef NS_ENUM(NSUInteger, PDAMessageManagerState) {
 @protocol PDAMessageHandler <NSObject>
 /**
  *  Confirm prev message and provide next from api layer. Async
- *  @param  PDAObjectId* messageId - already processed message. Could be nil
- *  @param  PDAResponseBlock responseBlock - block which return NSDictionary with server response
+ *  @param  messageId - already processed message. Could be nil
+ *  @param  responseBlock - block which return NSDictionary with server response
  */
 -(void) queueMessageManager:(PDAQueueMessageManager*)manager
-       confirmMessageWithId:(nullable PDAObjectId*)messageId
+       confirmMessageWithId:(nullable NSNumber*)messageId
          provideNextMessage:(nullable PDAResponseBlock)responseBlock;
 
 /**
  *  Handle message from queue. Async
- *  @param  PDAModelObject* message - Message for Handle. By default is subclass of queueMessageClass
- *  @param  PDAResponseBlock responseBlock - block which notify about ending of hanld message. Parameter result will be ignore in current implementation. Error tell for handler that message need reprocessed
+ *  @param  message - Message for Handle. By default is subclass of queueMessageClass
+ *  @param  responseBlock - block which notify about ending of hanld message. Parameter result will be ignore in current implementation. Error tell for handler that message need reprocessed
  *  @see  property Class  queueMessageClass;
  */
 -(void)  queueMessageManager:(PDAQueueMessageManager*)manager
                handleMessage:(id<PDAQueueCommand>)message
                   completion:(PDAResponseBlock)responseBlock;
+
+/**
+ Handle parse error
+ 
+ @param manager Queue manager
+ @param parseError Parse error
+ @return Object. Return null if you don't want process error. Message queue will request again new command
+ */
+-(nullable id<PDAQueueCommand>) queueMessageManager:(PDAQueueMessageManager*)manager
+                                  resolveParseError:(NSError*)parseError;
+
 @end
 NS_ASSUME_NONNULL_END

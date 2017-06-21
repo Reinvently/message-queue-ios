@@ -8,7 +8,6 @@
 
 #import "PDAQueueMessageManager.h"
 #import "PDAQueueCommand.h"
-#import "EXTScope.h"
 static const NSTimeInterval PDAQueueMessageManagerNowTime = 0.0;
 static const NSTimeInterval PDAQueueMessageManagerDefaultIdleTime = 60.f;
 
@@ -117,7 +116,7 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
         if (self.isProcessingMessage) {
             return PDAMessageManagerStateRunnedProcessMessage;
         }
-        return (self.activeMessage.type == PDAQueueCommandNone)?PDAMessageManagerStateRunnedIdle:PDAMessageManagerStateRunnedIdleMessage;
+        return (self.activeMessage.isEmptyCommand)?PDAMessageManagerStateRunnedIdle:PDAMessageManagerStateRunnedIdleMessage;
     }
 }
 
@@ -126,24 +125,24 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
  *  @warning messageProvider should be provided before this method was called. Async
  */
 -(void) run{
-    @weakify(self);
+    __weak PDAQueueMessageManager* weakSelf = self;
     dispatch_async(self.queue, ^{
-        @strongify(self);
+        PDAQueueMessageManager* strongSelf = weakSelf;
         MESSAGE_LOG(@"Try start");
-        if (self.isRunned) {
+        if (strongSelf.isRunned) {
             MESSAGE_LOG(@"Start failed. Already runned");
             return;
         }
-        if (self.messageHandler==nil) {
+        if (strongSelf.messageHandler==nil) {
             MESSAGE_LOG(@"Start failed. Handler is nil");
             return;
         }
-        @synchronized (self) {
-            self.active = YES;
+        @synchronized (strongSelf) {
+            strongSelf.active = YES;
             MESSAGE_LOG(@"Started");
 
         }
-        [self sheduleNextFetchMessageAndConfirmPrev:nil afterDelay:PDAQueueMessageManagerNowTime];
+        [strongSelf sheduleNextFetchMessageAndConfirmPrev:nil afterDelay:PDAQueueMessageManagerNowTime];
     });
     
 }
@@ -153,12 +152,12 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
  *  @warning Work only when state == PDAMessageManagerStateRunnedIdle. Async
  */
 -(void) forceRequestMessage{
-    @weakify(self);
+    __weak PDAQueueMessageManager* weakSelf = self;
     dispatch_async(self.queue, ^{
-        @strongify(self);
+        PDAQueueMessageManager* strongSelf = weakSelf;
         MESSAGE_LOG(@"Try force update");
-        if (self.isIdle) {
-            [self sheduleNextFetchMessageAndConfirmPrev:self.activeMessage
+        if (strongSelf.isIdle) {
+            [strongSelf sheduleNextFetchMessageAndConfirmPrev:strongSelf.activeMessage
                                              afterDelay:PDAQueueMessageManagerNowTime];
         }
     });
@@ -170,10 +169,10 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
  *  @warning Current message will be processed anyway. Async
  */
 -(void) suspend{
-    @weakify(self)
+    __weak PDAQueueMessageManager* weakSelf = self;
     dispatch_async(self.queue, ^{
-        @strongify(self);
-        [self suspendInternal];
+        PDAQueueMessageManager* strongSelf = weakSelf;
+        [strongSelf suspendInternal];
     });
 }
 
@@ -198,7 +197,7 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
 /**
  *  Prepare manager and fetch next message. 
  *  Optional - confirm prev message
- *  @param Message confirmation
+ *  @param message confirmation
  */
 -(void) fetchNextMessageAndConfirmPrev:(nullable id<PDAQueueCommand>)message{
     MESSAGE_LOG(@"Try fetch");
@@ -210,7 +209,7 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
         MESSAGE_LOG(@"Start fetching");
         self.processingMessage = YES;
     }
-    PNAWeakSelf;
+    __weak PDAQueueMessageManager* weakSelf = self;
     dispatch_async(dispatch_get_main_queue(), ^{
         
         MESSAGE_LOG(@"Start fetching");
@@ -233,7 +232,7 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
 
 /**
  *  Pepare message for handler
- *  @param Message confirmation
+ *  @param message confirmation
  */
 -(void) prepareMessageForHandler:(NSDictionary*) message{
     if (self.state==PDAMessageManagerStateSuspended) {
@@ -244,7 +243,10 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
     NSError* parserError = nil;
     self.activeMessage = [self.queueMessageClass modelObjectFromJSON:message key:@"command" error:&parserError];
     if (parserError) {
-        [NSException raise:@"Parser issue" format:@""];
+        
+        id<PDAQueueCommand> resolveCommand = [self.messageHandler queueMessageManager:self resolveParseError:parserError];
+        [self handleError:parserError prevMessage:resolveCommand];
+        
     }else{
         if (self.activeMessage) {
             self.messageProcessingDelay = self.activeMessage.delay;
@@ -252,7 +254,7 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
     }
     
     
-    PNAWeakSelf;
+    __weak typeof(self) weakSelf = self;
     //send message to handle
      dispatch_async(dispatch_get_main_queue(), ^{
          [weakSelf.messageHandler queueMessageManager:weakSelf
@@ -277,7 +279,7 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
         return;
     }
     
-    id <PDAQueueCommand> confirmMessage = (message.type==PDAQueueCommandNone)?nil:message;
+    id <PDAQueueCommand> confirmMessage = (message.isEmptyCommand)?nil:message;
     [self sheduleNextFetchMessageAndConfirmPrev:confirmMessage afterDelay:message.delay];
 }
 
@@ -287,7 +289,6 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
 -(void) handleError:(nonnull NSError*)error{
     [self handleError:error prevMessage:nil];
 }
-
 
 -(void) handleError:(nonnull NSError*)error prevMessage:(id<PDAQueueCommand>)message{
     @synchronized (self) {
@@ -306,10 +307,10 @@ static inline void pda_dispatch_async_safe(dispatch_queue_t queue, dispatch_bloc
         return;
     }
     MESSAGE_LOG(@"Shedule next processing after %f",delay);
-    @weakify(self);
+    __weak PDAQueueMessageManager* weakSelf = self;
     self.waitingBlock = dispatch_block_create(DISPATCH_BLOCK_INHERIT_QOS_CLASS, ^{
-        @strongify(self);
-        [self fetchNextMessageAndConfirmPrev:message];
+        PDAQueueMessageManager* strongSelf = weakSelf;
+        [strongSelf fetchNextMessageAndConfirmPrev:message];
     });
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay * NSEC_PER_SEC)), self.queue, self.waitingBlock);
 }
