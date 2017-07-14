@@ -32,15 +32,14 @@ HOW TO USE
     ```
 2. Start manager
 
-      ```objective-c
+    ```objective-c
     [manager run];
     ```
 
 3. Conform PDAMessageHandler
-
 3.1 Request message from server
 
-      ```objective-c
+    ```objective-c
     - (void) queueMessageManager:(nonnull PDAQueueMessageManager *)manager
                confirmMessageWithId:(id)messageId
                 provideNextMessage:(nullable PDAResponseBlock)responseBlock
@@ -50,9 +49,9 @@ HOW TO USE
             responseBlock(jsonResponse[@"command"],error);
         }];
     }
-   ```
+    ```
     3.2 Process message
-      ```objective-c
+    ```objective-c
     - (void) queueMessageManager:(nonnull PDAQueueMessageManager *)manager
                handleMessage:(nonnull id<PDAQueueCommand>)message
                   completion:(nonnull PDAResponseBlock)responseBlock
@@ -62,7 +61,7 @@ HOW TO USE
     }
     ```
     3.3 Handle a parse error. You could simply return null if you don't want process error
-      ```objective-c
+    ```objective-c
     - (nullable id<PDAQueueCommand>) queueMessageManager:(nonnull PDAQueueMessageManager *)manager
                                    resolveParseError:(nonnull NSError *)parseError
     {
