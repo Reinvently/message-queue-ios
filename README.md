@@ -37,9 +37,7 @@ HOW TO USE
     ```
 
 3. Conform PDAMessageHandler
-    
   3.1 Request message from server
-
     ```objective-c
     - (void) queueMessageManager:(nonnull PDAQueueMessageManager *)manager
                confirmMessageWithId:(id)messageId
