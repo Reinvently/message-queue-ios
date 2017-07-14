@@ -10,6 +10,7 @@ Add to your pod file
 QUICK START
 -----------
 You can use cocoapods command "try" for run DemoProject
+
 Steps:
 1. Add Reinvently Private repo to your CocoaPods installation
 
@@ -36,6 +37,7 @@ HOW TO USE
     ```
 
 3. Conform PDAMessageHandler
+
 3.1 Request message from server
       ```objective-c
     - (void) queueMessageManager:(nonnull PDAQueueMessageManager *)manager
@@ -66,7 +68,7 @@ HOW TO USE
         return nil;
     }
     ```
-4. If you intresting in changing class which represents message(by default it's PDAQueueCommand) you could do it in next way 
+4. If you intresting in changing class which represents message(by default it's PDAQueueCommand) you could do it by
     ```objective-c
     manager.queueMessageClass = [YourClass class];
     ```
